@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" class="dark" data-theme="midnight">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="QueryAI — ask your data a question in plain English and get validated SQL, real answers and beautiful charts." />
+    <meta name="theme-color" content="#060607" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <title>QueryAI — Understand your data</title>
+    <script>
+      // apply the saved theme before first paint (no flash)
+      try {
+        var t = localStorage.getItem('queryai.theme');
+        if (t === 'dark') t = 'midnight';
+        if (['midnight', 'crimson', 'graphite', 'marine', 'azure', 'light'].indexOf(t) < 0) t = 'midnight';
+        document.documentElement.dataset.theme = t;
+        if (t === 'light') document.documentElement.classList.remove('dark');
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

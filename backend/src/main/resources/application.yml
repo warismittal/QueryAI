@@ -1,0 +1,173 @@
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+
+spring:
+  application:
+    name: queryai
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # QUERYAI_DB_URL wins; otherwise the URL is assembled from parts (what Render/Railway expose for a database).
+    url: ${QUERYAI_DB_URL:jdbc:postgresql://${QUERYAI_DB_HOST:localhost}:${QUERYAI_DB_PORT:5432}/${QUERYAI_DB_NAME:queryai}}
+    username: ${QUERYAI_DB_USERNAME:queryai}
+    password: ${QUERYAI_DB_PASSWORD:queryai}
+    hikari:
+      pool-name: queryai-app
+      maximum-pool-size: ${QUERYAI_DB_POOL_SIZE:15}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none  # Flyway owns the schema
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: ${QUERYAI_MAX_UPLOAD_MB:25}MB
+      max-request-size: ${QUERYAI_MAX_UPLOAD_MB:25}MB
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+  # ---- LLM provider (Spring AI). Select with QUERYAI_LLM_PROVIDER = openai | anthropic ----
+  # Any OpenAI-compatible endpoint (OpenAI, Azure-compatible gateways, Groq, OpenRouter, Ollama, vLLM ...)
+  # works through OPENAI_BASE_URL. Keys left unset fall back to a sentinel and QueryAI reports the
+  # AI features as "not configured" instead of failing at startup.
+  ai:
+    model:
+      chat: ${QUERYAI_LLM_PROVIDER:openai}
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    retry:
+      max-attempts: 2
+    # OpenAI-compatible endpoints (set OPENAI_BASE_URL; Spring AI appends /v1/chat/completions):
+    #   Groq (free tier):   https://api.groq.com/openai        model llama-3.3-70b-versatile
+    #   Ollama (local):     http://host.docker.internal:11434   model qwen2.5-coder:3b   (any non-empty key)
+    #   OpenRouter:         https://openrouter.ai/api           model e.g. meta-llama/llama-3.3-70b-instruct
+    openai:
+      api-key: ${OPENAI_API_KEY:not-configured}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        completions-path: ${OPENAI_COMPLETIONS_PATH:/v1/chat/completions}
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.0
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:not-configured}
+      chat:
+        options:
+          model: ${ANTHROPIC_MODEL:claude-sonnet-4-5}
+          temperature: 0.0
+          max-tokens: 4096
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+queryai:
+  security:
+    # HS256 signing secret: at least 32 bytes. ALWAYS override in production.
+    jwt-secret: ${QUERYAI_JWT_SECRET:change-me-local-dev-secret-change-me-local-dev-secret}
+    jwt-ttl-minutes: ${QUERYAI_JWT_TTL_MINUTES:480}
+    # Base64-encoded 256-bit AES key used to encrypt data-source passwords at rest.
+    credential-key: ${QUERYAI_CREDENTIAL_KEY:bG9jYWwtZGV2LW9ubHktY3JlZGVudGlhbC1rZXktMzI=}
+    cors-allowed-origins: ${QUERYAI_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+    auth-rate-limit-per-minute: ${QUERYAI_AUTH_RATE_LIMIT:20}
+    ai-rate-limit-per-minute: ${QUERYAI_AI_RATE_LIMIT:30}
+  datasource:
+    # Hosts that may never be used as a connection target (SSRF protection, e.g. cloud metadata endpoints).
+    blocked-hosts: ${QUERYAI_BLOCKED_HOSTS:169.254.169.254,metadata.google.internal,100.100.100.200}
+    default-max-rows: 5000
+    hard-max-rows: 50000
+    connect-timeout-seconds: 10
+    pool-size: 4
+  ai:
+    provider: ${QUERYAI_LLM_PROVIDER:openai}
+    # When true, a small sample of result rows is sent to the LLM to write the natural-language explanation.
+    send-result-samples: ${QUERYAI_AI_SEND_RESULT_SAMPLES:true}
+    max-schema-tables: 12
+    max-conversation-turns: 6
+    repair-attempts: 1
+  sql:
+    # PostgreSQL EXPLAIN total-cost thresholds used for resource-limit validation.
+    warn-cost: 1.0e6
+    max-cost: 1.0e9
+  demo:
+    # Creates a starter account and a connection to the bundled e-commerce database on first start.
+    enabled: ${QUERYAI_DEMO_ENABLED:false}
+    email: ${QUERYAI_DEMO_EMAIL:analyst@queryai.app}
+    password: ${QUERYAI_DEMO_PASSWORD:QueryAI@2026}
+    # true on public deployments: demo user = ANALYST (masked PII, cannot reconfigure); a separate admin owns the workspace
+    public-mode: ${QUERYAI_DEMO_PUBLIC:false}
+    postgres:
+      enabled: true
+      host: ${QUERYAI_DEMO_PG_HOST:localhost}
+      port: ${QUERYAI_DEMO_PG_PORT:5432}
+      database: ${QUERYAI_DEMO_PG_DATABASE:commerce}
+      schema: ${QUERYAI_DEMO_PG_SCHEMA:public}
+      username: ${QUERYAI_DEMO_PG_USERNAME:queryai_reader}
+      password: ${DEMO_READER_PASSWORD:reader_pass}
+    mysql:
+      enabled: ${QUERYAI_DEMO_MYSQL_ENABLED:false}
+      host: ${QUERYAI_DEMO_MYSQL_HOST:localhost}
+      port: ${QUERYAI_DEMO_MYSQL_PORT:3306}
+      database: commerce
+      username: queryai_reader
+      password: reader_pass
+  embeddings:
+    # local  = built-in hashed lexical-semantic embeddings (no network, always available)
+    # openai = any OpenAI-compatible embeddings endpoint, e.g.
+    #          Ollama:  http://host.docker.internal:11434/v1/embeddings  model nomic-embed-text
+    #          OpenAI:  https://api.openai.com/v1/embeddings             model text-embedding-3-small
+    #          Gemini:  https://generativelanguage.googleapis.com/v1beta/openai/embeddings  model text-embedding-004
+    # none   = lexical ranking only
+    provider: ${QUERYAI_EMBEDDINGS_PROVIDER:local}
+    url: ${QUERYAI_EMBEDDINGS_URL:}
+    api-key: ${QUERYAI_EMBEDDINGS_API_KEY:}
+    model: ${QUERYAI_EMBEDDINGS_MODEL:}
+    timeout-seconds: 20
+  warehouse:
+    # PostgreSQL database that receives uploaded CSV files (one schema per workspace, read through the reader role).
+    enabled: ${QUERYAI_WAREHOUSE_ENABLED:false}
+    jdbc-url: ${QUERYAI_WAREHOUSE_URL:jdbc:postgresql://${QUERYAI_DB_HOST:localhost}:${QUERYAI_DB_PORT:5432}/${QUERYAI_DB_NAME:queryai}}
+    username: ${QUERYAI_WAREHOUSE_USERNAME:${QUERYAI_DB_USERNAME:queryai}}
+    password: ${QUERYAI_WAREHOUSE_PASSWORD:${QUERYAI_DB_PASSWORD:queryai}}
+    reader-username: ${QUERYAI_WAREHOUSE_READER_USERNAME:queryai_reader}
+    reader-password: ${QUERYAI_WAREHOUSE_READER_PASSWORD:${DEMO_READER_PASSWORD:reader_pass}}
+    # Single-database hosting (Render free tier): load the demo e-commerce dataset into demo-schema on first start.
+    bootstrap-demo: ${QUERYAI_WAREHOUSE_BOOTSTRAP_DEMO:false}
+    demo-schema: ${QUERYAI_DEMO_PG_SCHEMA:public}
+    max-upload-rows: ${QUERYAI_MAX_UPLOAD_ROWS:250000}
+    max-upload-bytes: ${QUERYAI_MAX_UPLOAD_BYTES:26214400}
+
+logging:
+  level:
+    com.queryai: INFO

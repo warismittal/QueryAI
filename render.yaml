@@ -1,0 +1,74 @@
+# Render Blueprint — one free web service (UI + API in one container) and one free PostgreSQL (pgvector available).
+# Deploy: push this repo to GitHub → Render dashboard → New → Blueprint → pick the repo → Apply.
+# Then set OPENAI_API_KEY (your Groq key) in the service's Environment tab. See docs/DEPLOY.md.
+databases:
+  - name: queryai-db
+    plan: free
+    databaseName: queryai
+    user: queryai
+
+services:
+  - type: web
+    name: queryai
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health
+    envVars:
+      # application database
+      - key: QUERYAI_DB_HOST
+        fromDatabase: { name: queryai-db, property: host }
+      - key: QUERYAI_DB_PORT
+        fromDatabase: { name: queryai-db, property: port }
+      - key: QUERYAI_DB_NAME
+        fromDatabase: { name: queryai-db, property: database }
+      - key: QUERYAI_DB_USERNAME
+        fromDatabase: { name: queryai-db, property: user }
+      - key: QUERYAI_DB_PASSWORD
+        fromDatabase: { name: queryai-db, property: password }
+      - key: QUERYAI_DB_POOL_SIZE
+        value: "5"
+      # secrets (generated once by Render)
+      - key: QUERYAI_JWT_SECRET
+        generateValue: true
+      - key: QUERYAI_CREDENTIAL_KEY
+        generateValue: true
+      - key: DEMO_READER_PASSWORD
+        generateValue: true
+      # AI — Groq's free OpenAI-compatible API; paste your key in the dashboard
+      - key: QUERYAI_LLM_PROVIDER
+        value: openai
+      - key: OPENAI_BASE_URL
+        value: https://api.groq.com/openai
+      - key: OPENAI_MODEL
+        value: llama-3.3-70b-versatile
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: QUERYAI_EMBEDDINGS_PROVIDER
+        value: local
+      # demo dataset + CSV uploads live in the same database (schemas "commerce" and "uploads_w<id>")
+      - key: QUERYAI_WAREHOUSE_ENABLED
+        value: "true"
+      - key: QUERYAI_WAREHOUSE_BOOTSTRAP_DEMO
+        value: "true"
+      - key: QUERYAI_DEMO_ENABLED
+        value: "true"
+      - key: QUERYAI_DEMO_PUBLIC
+        value: "true"
+      - key: QUERYAI_DEMO_PG_HOST
+        fromDatabase: { name: queryai-db, property: host }
+      - key: QUERYAI_DEMO_PG_PORT
+        fromDatabase: { name: queryai-db, property: port }
+      - key: QUERYAI_DEMO_PG_DATABASE
+        fromDatabase: { name: queryai-db, property: database }
+      - key: QUERYAI_DEMO_PG_SCHEMA
+        value: commerce
+      - key: QUERYAI_DEMO_PG_USERNAME
+        value: queryai_reader
+      - key: QUERYAI_DEMO_MYSQL_ENABLED
+        value: "false"
+      - key: QUERYAI_MAX_UPLOAD_MB
+        value: "10"
+      - key: QUERYAI_MAX_UPLOAD_ROWS
+        value: "100000"

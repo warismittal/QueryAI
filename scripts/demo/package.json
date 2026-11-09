@@ -1,0 +1,7 @@
+{
+  "name": "queryai-demo-recorder",
+  "private": true,
+  "type": "module",
+  "scripts": { "record": "node record-demo.mjs" },
+  "dependencies": { "playwright-core": "1.48.2" }
+}

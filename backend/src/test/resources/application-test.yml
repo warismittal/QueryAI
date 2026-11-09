@@ -1,0 +1,11 @@
+queryai:
+  security:
+    auth-rate-limit-per-minute: 1000
+    ai-rate-limit-per-minute: 1000
+  demo:
+    enabled: false
+
+logging:
+  level:
+    com.queryai: DEBUG
+    org.testcontainers: INFO

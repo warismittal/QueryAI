@@ -1,0 +1,248 @@
+{
+  "name": "QueryAI e-commerce benchmark",
+  "version": 1,
+  "dataSource": "E-commerce (PostgreSQL)",
+  "notes": "Gold SQL runs against the bundled demo database (database/demo/postgres). Revenue follows the demo glossary: sum of orders.total_amount excluding cancelled and returned orders. Dates are absolute so results never drift.",
+  "questions": [
+    {
+      "id": "e01",
+      "difficulty": "easy",
+      "question": "How many customers are there?",
+      "sql": "SELECT COUNT(*) FROM customers"
+    },
+    {
+      "id": "e02",
+      "difficulty": "easy",
+      "question": "How many products are currently active?",
+      "sql": "SELECT COUNT(*) FROM products WHERE is_active"
+    },
+    {
+      "id": "e03",
+      "difficulty": "easy",
+      "question": "How many orders were placed in 2025?",
+      "sql": "SELECT COUNT(*) FROM orders WHERE order_date >= DATE '2025-01-01' AND order_date < DATE '2026-01-01'"
+    },
+    {
+      "id": "e04",
+      "difficulty": "easy",
+      "question": "How many customers are in each segment?",
+      "sql": "SELECT segment, COUNT(*) FROM customers GROUP BY segment"
+    },
+    {
+      "id": "e05",
+      "difficulty": "easy",
+      "question": "How many orders are there for each order status?",
+      "sql": "SELECT status, COUNT(*) FROM orders GROUP BY status"
+    },
+    {
+      "id": "e06",
+      "difficulty": "easy",
+      "question": "How many customers do we have in each country?",
+      "sql": "SELECT country, COUNT(*) FROM customers GROUP BY country"
+    },
+    {
+      "id": "e07",
+      "difficulty": "easy",
+      "question": "What is the average unit price of active products?",
+      "sql": "SELECT ROUND(AVG(unit_price), 2) FROM products WHERE is_active"
+    },
+    {
+      "id": "e08",
+      "difficulty": "easy",
+      "question": "What is the most expensive product by list price? Return its name and price.",
+      "sql": "SELECT name, unit_price FROM products ORDER BY unit_price DESC LIMIT 1"
+    },
+    {
+      "id": "e09",
+      "difficulty": "easy",
+      "question": "How many payments were made with each payment method?",
+      "sql": "SELECT payment_method, COUNT(*) FROM payments GROUP BY payment_method"
+    },
+    {
+      "id": "e10",
+      "difficulty": "easy",
+      "question": "What is the average star rating across all product reviews?",
+      "sql": "SELECT ROUND(AVG(rating), 2) FROM product_reviews"
+    },
+    {
+      "id": "e11",
+      "difficulty": "easy",
+      "question": "How many warehouses are there in each country?",
+      "sql": "SELECT country, COUNT(*) FROM warehouses GROUP BY country"
+    },
+    {
+      "id": "e12",
+      "difficulty": "easy",
+      "question": "How many orders were cancelled in 2024?",
+      "sql": "SELECT COUNT(*) FROM orders WHERE status = 'cancelled' AND order_date >= DATE '2024-01-01' AND order_date < DATE '2025-01-01'"
+    },
+    {
+      "id": "m01",
+      "difficulty": "medium",
+      "question": "What is the total revenue for each sales channel?",
+      "sql": "SELECT channel, SUM(total_amount) FROM orders WHERE status NOT IN ('cancelled', 'returned') GROUP BY channel"
+    },
+    {
+      "id": "m02",
+      "difficulty": "medium",
+      "question": "What was the total revenue in 2025?",
+      "sql": "SELECT SUM(total_amount) FROM orders WHERE status NOT IN ('cancelled', 'returned') AND order_date >= DATE '2025-01-01' AND order_date < DATE '2026-01-01'"
+    },
+    {
+      "id": "m03",
+      "difficulty": "medium",
+      "question": "What is the average order value per sales channel? Exclude cancelled and returned orders.",
+      "sql": "SELECT channel, ROUND(AVG(total_amount), 2) FROM orders WHERE status NOT IN ('cancelled', 'returned') GROUP BY channel"
+    },
+    {
+      "id": "m04",
+      "difficulty": "medium",
+      "question": "What is the monthly revenue for 2025? Return one row per month.",
+      "sql": "SELECT date_trunc('month', order_date) AS month, SUM(total_amount) FROM orders WHERE status NOT IN ('cancelled', 'returned') AND order_date >= DATE '2025-01-01' AND order_date < DATE '2026-01-01' GROUP BY 1"
+    },
+    {
+      "id": "m05",
+      "difficulty": "medium",
+      "question": "What is the total revenue by customer country?",
+      "sql": "SELECT c.country, SUM(o.total_amount) FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.status NOT IN ('cancelled', 'returned') GROUP BY c.country"
+    },
+    {
+      "id": "m06",
+      "difficulty": "medium",
+      "question": "Which 5 products sold the most units? Count units from order items of orders that were not cancelled or returned, and return the product name and units sold.",
+      "sql": "SELECT p.name, SUM(oi.quantity) AS units FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status NOT IN ('cancelled', 'returned') GROUP BY p.id, p.name ORDER BY units DESC LIMIT 5"
+    },
+    {
+      "id": "m07",
+      "difficulty": "medium",
+      "question": "Which brand has the highest average review rating? Return the brand and its average rating.",
+      "sql": "SELECT p.brand, ROUND(AVG(r.rating), 2) AS avg_rating FROM product_reviews r JOIN products p ON p.id = r.product_id GROUP BY p.brand ORDER BY avg_rating DESC LIMIT 1"
+    },
+    {
+      "id": "m08",
+      "difficulty": "medium",
+      "question": "How many inventory records are below their reorder level in each warehouse? Return the warehouse name and the count.",
+      "sql": "SELECT w.name, COUNT(*) FROM inventory i JOIN warehouses w ON w.id = i.warehouse_id WHERE i.quantity_on_hand < i.reorder_level GROUP BY w.name"
+    },
+    {
+      "id": "m09",
+      "difficulty": "medium",
+      "question": "What is the total quantity on hand for each warehouse? Return the warehouse name and total quantity.",
+      "sql": "SELECT w.name, SUM(i.quantity_on_hand) FROM inventory i JOIN warehouses w ON w.id = i.warehouse_id GROUP BY w.name"
+    },
+    {
+      "id": "m10",
+      "difficulty": "medium",
+      "question": "How many customers signed up in each year?",
+      "sql": "SELECT EXTRACT(YEAR FROM signup_date) AS year, COUNT(*) FROM customers GROUP BY 1"
+    },
+    {
+      "id": "m11",
+      "difficulty": "medium",
+      "question": "What is the total amount of refunded payments by payment method?",
+      "sql": "SELECT payment_method, SUM(amount) FROM payments WHERE status = 'refunded' GROUP BY payment_method"
+    },
+    {
+      "id": "m12",
+      "difficulty": "medium",
+      "question": "Which 10 customers have spent the most in total? Exclude cancelled and returned orders, and return each customer's id and total spending.",
+      "sql": "SELECT o.customer_id, SUM(o.total_amount) AS spent FROM orders o WHERE o.status NOT IN ('cancelled', 'returned') GROUP BY o.customer_id ORDER BY spent DESC LIMIT 10"
+    },
+    {
+      "id": "m13",
+      "difficulty": "medium",
+      "question": "How many orders did each warehouse ship in 2025? Return the warehouse name and the number of orders placed in 2025 that were fulfilled by it.",
+      "sql": "SELECT w.name, COUNT(*) FROM orders o JOIN warehouses w ON w.id = o.warehouse_id WHERE o.order_date >= DATE '2025-01-01' AND o.order_date < DATE '2026-01-01' GROUP BY w.name"
+    },
+    {
+      "id": "m14",
+      "difficulty": "medium",
+      "question": "What share of all orders were returned? Give the percentage rounded to two decimals.",
+      "sql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'returned') / COUNT(*), 2) FROM orders"
+    },
+    {
+      "id": "m15",
+      "difficulty": "medium",
+      "question": "What is the total discount amount given on orders in each sales channel?",
+      "sql": "SELECT channel, SUM(discount_amount) FROM orders GROUP BY channel"
+    },
+    {
+      "id": "m16",
+      "difficulty": "medium",
+      "question": "How many reviews does each star rating have?",
+      "sql": "SELECT rating, COUNT(*) FROM product_reviews GROUP BY rating"
+    },
+    {
+      "id": "h01",
+      "difficulty": "hard",
+      "question": "What is the line-item revenue for each top-level product category? Use order_items.line_total for orders that were not cancelled or returned, and roll subcategories up to their top-level category.",
+      "sql": "SELECT COALESCE(parent.name, c.name) AS category, SUM(oi.line_total) FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id JOIN categories c ON c.id = p.category_id LEFT JOIN categories parent ON parent.id = c.parent_category_id WHERE o.status NOT IN ('cancelled', 'returned') GROUP BY 1"
+    },
+    {
+      "id": "h02",
+      "difficulty": "hard",
+      "question": "What is the gross margin percentage for each brand? Gross margin is the sum of line_total minus quantity times unit_cost, divided by the sum of line_total, for orders that were not cancelled or returned. Round to two decimals.",
+      "sql": "SELECT p.brand, ROUND(100 * SUM(oi.line_total - oi.quantity * p.unit_cost) / SUM(oi.line_total), 2) FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status NOT IN ('cancelled', 'returned') GROUP BY p.brand"
+    },
+    {
+      "id": "h03",
+      "difficulty": "hard",
+      "question": "For each customer segment, what is the average total spending per customer? Only count orders that were not cancelled or returned and only customers who have at least one such order.",
+      "sql": "SELECT c.segment, ROUND(AVG(t.spent), 2) FROM (SELECT customer_id, SUM(total_amount) AS spent FROM orders WHERE status NOT IN ('cancelled', 'returned') GROUP BY customer_id) t JOIN customers c ON c.id = t.customer_id GROUP BY c.segment"
+    },
+    {
+      "id": "h04",
+      "difficulty": "hard",
+      "question": "Which products have fewer than 12 reviews? Return each product's name and its number of reviews.",
+      "sql": "SELECT p.name, COUNT(r.id) FROM products p LEFT JOIN product_reviews r ON r.product_id = p.id GROUP BY p.id, p.name HAVING COUNT(r.id) < 12"
+    },
+    {
+      "id": "h05",
+      "difficulty": "hard",
+      "question": "How many customers have never placed an order?",
+      "sql": "SELECT COUNT(*) FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)"
+    },
+    {
+      "id": "h06",
+      "difficulty": "hard",
+      "question": "Compare total revenue in 2024 and 2025 for each sales channel. Return the channel, 2024 revenue and 2025 revenue.",
+      "sql": "SELECT channel, SUM(total_amount) FILTER (WHERE order_date >= DATE '2024-01-01' AND order_date < DATE '2025-01-01'), SUM(total_amount) FILTER (WHERE order_date >= DATE '2025-01-01' AND order_date < DATE '2026-01-01') FROM orders WHERE status NOT IN ('cancelled', 'returned') GROUP BY channel"
+    },
+    {
+      "id": "h07",
+      "difficulty": "hard",
+      "question": "Which top-level category has the most products that are low on stock in at least one warehouse (quantity on hand below reorder level)? Return the category name and the number of distinct products.",
+      "sql": "SELECT COALESCE(parent.name, c.name) AS category, COUNT(DISTINCT p.id) AS products FROM inventory i JOIN products p ON p.id = i.product_id JOIN categories c ON c.id = p.category_id LEFT JOIN categories parent ON parent.id = c.parent_category_id WHERE i.quantity_on_hand < i.reorder_level GROUP BY 1 ORDER BY products DESC LIMIT 1"
+    },
+    {
+      "id": "h08",
+      "difficulty": "hard",
+      "question": "What is the average number of days between a customer's signup date and their first order? Round to one decimal.",
+      "sql": "SELECT ROUND(AVG(first_order::date - c.signup_date), 1) FROM (SELECT customer_id, MIN(order_date) AS first_order FROM orders GROUP BY customer_id) f JOIN customers c ON c.id = f.customer_id"
+    },
+    {
+      "id": "h09",
+      "difficulty": "hard",
+      "question": "Which month of 2025 had the highest revenue? Return the month and its revenue.",
+      "sql": "SELECT date_trunc('month', order_date) AS month, SUM(total_amount) AS revenue FROM orders WHERE status NOT IN ('cancelled', 'returned') AND order_date >= DATE '2025-01-01' AND order_date < DATE '2026-01-01' GROUP BY 1 ORDER BY revenue DESC LIMIT 1"
+    },
+    {
+      "id": "h10",
+      "difficulty": "hard",
+      "question": "How many customers placed orders in both 2024 and 2025?",
+      "sql": "SELECT COUNT(*) FROM (SELECT customer_id FROM orders WHERE order_date >= DATE '2024-01-01' AND order_date < DATE '2025-01-01' INTERSECT SELECT customer_id FROM orders WHERE order_date >= DATE '2025-01-01' AND order_date < DATE '2026-01-01') t"
+    },
+    {
+      "id": "h11",
+      "difficulty": "hard",
+      "question": "What is the average rating of products in each top-level category? Round to two decimals.",
+      "sql": "SELECT COALESCE(parent.name, c.name) AS category, ROUND(AVG(r.rating), 2) FROM product_reviews r JOIN products p ON p.id = r.product_id JOIN categories c ON c.id = p.category_id LEFT JOIN categories parent ON parent.id = c.parent_category_id GROUP BY 1"
+    },
+    {
+      "id": "h12",
+      "difficulty": "hard",
+      "question": "Which 3 countries had the highest revenue from Corporate segment customers? Return the country and the revenue.",
+      "sql": "SELECT c.country, SUM(o.total_amount) AS revenue FROM orders o JOIN customers c ON c.id = o.customer_id WHERE c.segment = 'Corporate' AND o.status NOT IN ('cancelled', 'returned') GROUP BY c.country ORDER BY revenue DESC LIMIT 3"
+    }
+  ]
+}

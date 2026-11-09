@@ -1,0 +1,16 @@
+.env
+.env.backup
+.idea/
+*.iml
+.DS_Store
+backend/target/
+frontend/node_modules/
+frontend/dist/
+scripts/demo/node_modules/
+logs/
+*.log
+demo/*.webm
+
+# course report (kept local)
+docs/QueryAI_Technical_Report.*
+frontend/node_modules/

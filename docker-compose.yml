@@ -1,0 +1,95 @@
+name: queryai
+
+services:
+  postgres:
+    # PostgreSQL 16 with the pgvector extension (semantic schema search runs in the database)
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: queryai
+      POSTGRES_USER: queryai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-queryai}
+      DEMO_READER_PASSWORD: ${DEMO_READER_PASSWORD:-reader_pass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # creates the separate commerce business database + read-only role on first start
+      - ./database/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./database/demo:/demo:ro
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U queryai -d queryai && psql -U queryai -d commerce -tAc 'select 1 from product_reviews limit 1' | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-queryai-root}
+      MYSQL_DATABASE: commerce
+    volumes:
+      - mysqldata:/var/lib/mysql
+      - ./database/demo/mysql:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "33306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysql -uqueryai_reader -preader_pass -e 'select 1 from commerce.product_reviews limit 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  backend:
+    build: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    environment:
+      QUERYAI_DB_URL: jdbc:postgresql://postgres:5432/queryai
+      QUERYAI_DB_USERNAME: queryai
+      QUERYAI_DB_PASSWORD: ${POSTGRES_PASSWORD:-queryai}
+      QUERYAI_JWT_SECRET: ${QUERYAI_JWT_SECRET:-change-me-local-dev-secret-change-me-local-dev-secret}
+      QUERYAI_CREDENTIAL_KEY: ${QUERYAI_CREDENTIAL_KEY:-bG9jYWwtZGV2LW9ubHktY3JlZGVudGlhbC1rZXktMzI=}
+      QUERYAI_CORS_ORIGINS: http://localhost:13000,http://localhost:5173
+      QUERYAI_LLM_PROVIDER: ${QUERYAI_LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-configured}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_COMPLETIONS_PATH: ${OPENAI_COMPLETIONS_PATH:-/v1/chat/completions}
+      QUERYAI_AI_RATE_LIMIT: ${QUERYAI_AI_RATE_LIMIT:-30}
+      # semantic schema search: local (built-in) | openai (any OpenAI-compatible /embeddings endpoint) | none
+      QUERYAI_EMBEDDINGS_PROVIDER: ${QUERYAI_EMBEDDINGS_PROVIDER:-local}
+      QUERYAI_EMBEDDINGS_URL: ${QUERYAI_EMBEDDINGS_URL:-}
+      QUERYAI_EMBEDDINGS_MODEL: ${QUERYAI_EMBEDDINGS_MODEL:-}
+      QUERYAI_EMBEDDINGS_API_KEY: ${QUERYAI_EMBEDDINGS_API_KEY:-}
+      # CSV uploads land in per-workspace schemas of the demo warehouse database, read through queryai_reader
+      QUERYAI_WAREHOUSE_ENABLED: "true"
+      QUERYAI_WAREHOUSE_URL: jdbc:postgresql://postgres:5432/commerce
+      QUERYAI_WAREHOUSE_USERNAME: queryai
+      QUERYAI_WAREHOUSE_PASSWORD: ${POSTGRES_PASSWORD:-queryai}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-configured}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-5}
+      QUERYAI_DEMO_ENABLED: ${QUERYAI_DEMO_ENABLED:-true}
+      QUERYAI_DEMO_PASSWORD: ${QUERYAI_DEMO_PASSWORD:-QueryAI@2026}
+      QUERYAI_DEMO_PG_HOST: postgres
+      QUERYAI_DEMO_MYSQL_ENABLED: "true"
+      QUERYAI_DEMO_MYSQL_HOST: mysql
+      DEMO_READER_PASSWORD: ${DEMO_READER_PASSWORD:-reader_pass}
+    extra_hosts:
+      # lets the backend reach Ollama or other services running on the host (Linux; built in on Docker Desktop)
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "18080:8080"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "13000:80"
+
+volumes:
+  pgdata:
+  mysqldata:

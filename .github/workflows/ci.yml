@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  backend:
+    name: Backend (Java 21, unit + Testcontainers integration tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build and test
+        run: mvn -B verify
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            backend/target/surefire-reports
+            backend/target/failsafe-reports
+
+  frontend:
+    name: Frontend (typecheck, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx tsc -p tsconfig.test.json
+      - run: npm test
+      - run: npm run build
+
+  demo-data:
+    name: Demo database loads on PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load schema, data and read-only grants
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "CREATE DATABASE commerce" -c "CREATE ROLE queryai_reader LOGIN PASSWORD 'reader_pass'"
+          for f in 01-schema.sql 02-data.sql 03-readonly-grants.sql; do
+            psql -v ON_ERROR_STOP=1 -q -h localhost -U postgres -d commerce -f database/demo/postgres/$f
+          done
+          PGPASSWORD=reader_pass psql -h localhost -U queryai_reader -d commerce -c "select count(*) from orders"
+      - name: Benchmark gold SQL runs and returns rows
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: node scripts/benchmark/check-gold.mjs commerce
+
+  docker:
+    name: Docker images
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Image name (registry paths must be lower-case)
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/${{ steps.repo.outputs.name }}/backend:latest,ghcr.io/${{ steps.repo.outputs.name }}/backend:${{ github.sha }}
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/${{ steps.repo.outputs.name }}/frontend:latest,ghcr.io/${{ steps.repo.outputs.name }}/frontend:${{ github.sha }}
+
+  benchmark:
+    name: Text-to-SQL accuracy benchmark (live model)
+    # Runs the full stack with docker compose and asks the real model all benchmark questions.
+    # Needs a repository secret GROQ_API_KEY (free at console.groq.com); skipped without it.
+    needs: [backend, frontend]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip without a model key
+        if: env.GROQ_API_KEY == ''
+        run: echo "::notice::Benchmark skipped — add a GROQ_API_KEY repository secret to measure accuracy on every push."
+      - name: Start QueryAI
+        if: env.GROQ_API_KEY != ''
+        env:
+          OPENAI_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENAI_BASE_URL: https://api.groq.com/openai
+          OPENAI_MODEL: llama-3.3-70b-versatile
+          QUERYAI_AI_RATE_LIMIT: "1000"
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 90); do curl -fs http://localhost:18080/actuator/health | grep -q UP && break; sleep 5; done
+          curl -fs http://localhost:18080/actuator/health
+      - uses: actions/setup-node@v4
+        if: env.GROQ_API_KEY != ''
+        with:
+          node-version: '22'
+      - name: Run benchmark
+        if: env.GROQ_API_KEY != ''
+        run: node scripts/benchmark/run-benchmark.mjs --url http://localhost:13000 --out benchmark/results
+      - name: Upload results
+        if: always() && env.GROQ_API_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark/results
+      - name: Backend logs on failure
+        if: failure() && env.GROQ_API_KEY != ''
+        run: docker compose logs backend --tail 300
